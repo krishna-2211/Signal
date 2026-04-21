@@ -3,9 +3,38 @@ from collections import Counter, defaultdict
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from backend.auth import get_current_user
-from backend.database.db import get_all_clients_with_latest_signals
+from backend.database.db import get_all_clients_with_latest_signals, get_connection
 
 router = APIRouter()
+
+
+def _overlay_brief_signals(clients: list[dict]) -> list[dict]:
+    """Replace signal_type/severity with the latest brief's values where available."""
+    if not clients:
+        return clients
+    client_ids = [c["id"] for c in clients]
+    placeholders = ",".join("?" * len(client_ids))
+    sql = f"""
+        SELECT client_id, signal_type, severity
+        FROM briefs
+        WHERE id IN (
+            SELECT MAX(id) FROM briefs
+            WHERE client_id IN ({placeholders})
+            GROUP BY client_id
+        )
+        AND signal_type != 'none' AND signal_type IS NOT NULL
+        AND severity != 'NONE' AND severity IS NOT NULL
+    """
+    with get_connection() as conn:
+        rows = conn.execute(sql, client_ids).fetchall()
+    brief_map = {r["client_id"]: dict(r) for r in rows}
+
+    for c in clients:
+        brief = brief_map.get(c["id"])
+        if brief:
+            c["signal_type"] = brief["signal_type"]
+            c["severity"]    = brief["severity"]
+    return clients
 
 
 @router.get("/risk")
@@ -23,7 +52,7 @@ def risk_dashboard(current_user: dict = Depends(get_current_user)):
             detail="Risk dashboard requires risk role",
         )
 
-    clients = get_all_clients_with_latest_signals()
+    clients = _overlay_brief_signals(get_all_clients_with_latest_signals())
 
     # ------------------------------------------------------------------
     # Severity counts

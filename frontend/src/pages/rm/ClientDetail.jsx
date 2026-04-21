@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import Sidebar from "../../components/Sidebar";
 import { actionBrief, getClientDetail } from "../../services/api";
-import { getSignalTheme } from "../../utils/signalColors";
+import { getSignalColors, getSignalTheme } from "../../utils/signalColors";
 import "../../styles/client-detail.css";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -94,8 +94,9 @@ function deriveMetrics(data) {
 
 // ── TransactionChart ───────────────────────────────────────────────────────────
 
-function TransactionChart({ transactions, signalType }) {
+function TransactionChart({ transactions, signalType, colors }) {
   const theme = getSignalTheme(signalType);
+  const chartColor = colors?.borderColor ?? theme.hex;
 
   // transactions are desc; reverse for chronological display
   const weeks = [...(transactions ?? [])].reverse().slice(-12);
@@ -123,7 +124,7 @@ function TransactionChart({ transactions, signalType }) {
   return (
     <div className="card chart-card">
       <div className="card-head">
-        <span className="accent" style={{ background: theme.color }} />
+        <span className="accent" style={{ background: chartColor }} />
         <h3>Transaction Volume · Last 12 Weeks</h3>
         <span className="count-chip">Weekly</span>
       </div>
@@ -146,7 +147,7 @@ function TransactionChart({ transactions, signalType }) {
       </div>
 
       <div className="chart-wrap">
-        <div className="chart" style={{ "--signal-color": theme.color, "--signal-text": theme.text }}>
+        <div className="chart" style={{ "--signal-color": chartColor, "--signal-text": theme.text }}>
           <div className="y-axis">
             {yLabels.map((l) => <span key={l}>{l}</span>)}
           </div>
@@ -171,9 +172,9 @@ function TransactionChart({ transactions, signalType }) {
                       style={{
                         height: `${heightPct}%`,
                         background: isCurrent
-                          ? theme.hex
+                          ? chartColor
                           : isAlert
-                          ? `${theme.hex}66`
+                          ? `${chartColor}66`
                           : undefined,
                       }}
                     />
@@ -192,7 +193,7 @@ function TransactionChart({ transactions, signalType }) {
           Weekly volume
         </span>
         <span className="k">
-          <span className="sw" style={{ background: theme.color }} />
+          <span className="sw" style={{ background: chartColor }} />
           Current week
         </span>
       </div>
@@ -285,9 +286,15 @@ export default function ClientDetail() {
 
   const { client, transactions, payments, balances, logins, product_usage, latest_signal, latest_brief } = data;
 
-  const signalType  = (latest_signal?.signal_type ?? "none").toLowerCase();
-  const severity    = latest_signal?.severity ?? "NONE";
-  const theme       = getSignalTheme(signalType);
+  // Brief is the authoritative signal source; fall back to raw signal table
+  const signalType = (
+    latest_brief?.signal_type ||
+    latest_signal?.signal_type ||
+    "none"
+  ).toLowerCase();
+  const severity = latest_brief?.severity || latest_signal?.severity || "NONE";
+  const theme    = getSignalTheme(signalType);
+  const colors   = getSignalColors(signalType);
   const metrics     = deriveMetrics({ client, balances, payments, logins, transactions });
 
   const clientInitials  = initials(client.name);
@@ -353,8 +360,12 @@ export default function ClientDetail() {
               </div>
               {signalType !== "none" && (
                 <div className="head-badges">
-                  <span className={`badge ${theme.badgeClass}`}>
-                    <span className="sigil" />{theme.label}
+                  <span
+                    className="badge"
+                    style={{ background: colors.badgeBg, color: colors.badgeColor, borderColor: colors.borderColor }}
+                  >
+                    <span className="sigil" style={{ background: colors.badgeColor }} />
+                    {colors.label}
                   </span>
                   <span className={`badge sev ${severity.toLowerCase()}`}>
                     <span className="sigil" />{severity.charAt(0) + severity.slice(1).toLowerCase()} Severity
@@ -380,9 +391,16 @@ export default function ClientDetail() {
 
               {/* Signal brief */}
               {(latest_brief || latest_signal) && (
-                <div className="card brief-card" style={{ "--signal-color": theme.color }}>
+                <div
+                  className="card brief-card"
+                  style={{
+                    borderLeft: `3px solid ${colors.borderColor}`,
+                    background: colors.background,
+                    "--signal-color": colors.borderColor,
+                  }}
+                >
                   <div className="card-head">
-                    <span className="accent" style={{ background: theme.color }} />
+                    <span className="accent" style={{ background: colors.borderColor }} />
                     <h3>Signal Brief</h3>
                     {latest_signal?.run_date && (
                       <span className="count-chip">Detected {relDate(latest_signal.run_date)}</span>
@@ -398,7 +416,17 @@ export default function ClientDetail() {
                     )}
 
                     {latest_brief?.recommended_action && (
-                      <div className="action-box" style={{ "--signal-color": theme.color, "--signal-soft": theme.soft, "--signal-text": theme.text }}>
+                      <div
+                        className="action-box"
+                        style={{
+                          borderLeft: `2px solid ${colors.borderColor}`,
+                          background: colors.badgeBg,
+                          color: colors.textColor,
+                          "--signal-color": colors.borderColor,
+                          "--signal-soft":  colors.background,
+                          "--signal-text":  colors.textColor,
+                        }}
+                      >
                         <div className="ico-wrap">
                           <svg className="ico" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M6 1v7M6 11v.01" />
@@ -436,19 +464,24 @@ export default function ClientDetail() {
                 <div className="card-body">
                   {latest_signal ? (
                     <div className="tl">
-                      <div className={`tl-item ${theme.tlClass}`}>
-                        <span className="node" />
+                      <div className="tl-item" style={{ "--tl-color": colors.borderColor }}>
+                        <span className="node" style={{ background: colors.borderColor }} />
                         <div className="tl-row1">
                           <span className="tl-date">
                             {latest_signal.run_date
                               ? new Date(latest_signal.run_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })
                               : "—"}
                           </span>
-                          <span className={`tl-tag ${theme.tlTag}`}>
-                            {theme.label} · {severity.charAt(0) + severity.slice(1).toLowerCase()}
+                          <span
+                            className="tl-tag"
+                            style={{ background: colors.badgeBg, color: colors.badgeColor }}
+                          >
+                            {colors.label} · {severity.charAt(0) + severity.slice(1).toLowerCase()}
                           </span>
                         </div>
-                        <div className="tl-title">{theme.label} signal detected</div>
+                        <div className="tl-title" style={{ color: colors.textColor }}>
+                          {colors.label} signal detected
+                        </div>
                         {latest_signal.reasoning && (
                           <div className="tl-text">{latest_signal.reasoning}</div>
                         )}
@@ -470,7 +503,7 @@ export default function ClientDetail() {
               {/* Key metrics */}
               <div className="card">
                 <div className="card-head">
-                  <span className="accent" style={{ background: theme.color }} />
+                  <span className="accent" style={{ background: colors.borderColor }} />
                   <h3>Key Metrics</h3>
                   <div className="right" style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--text-3)" }}>
                     Current period
@@ -618,7 +651,7 @@ export default function ClientDetail() {
 
           {/* Transaction chart */}
           {transactions?.length > 0 && (
-            <TransactionChart transactions={transactions} signalType={signalType} />
+            <TransactionChart transactions={transactions} signalType={signalType} colors={colors} />
           )}
 
         </section>

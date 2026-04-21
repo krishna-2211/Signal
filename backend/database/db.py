@@ -78,15 +78,25 @@ def get_all_clients_with_latest_signals() -> list[dict]:
         SELECT c.*, rm.name AS rm_name,
                s.signal_type, s.severity, s.score,
                s.churn_score, s.credit_stress_score, s.upsell_score,
-               s.reasoning, s.run_date AS signal_run_date
+               s.reasoning, s.run_date AS signal_run_date,
+               s.created_at AS signal_created_at
         FROM clients c
         LEFT JOIN relationship_managers rm ON c.relationship_manager_id = rm.id
-        LEFT JOIN signals s ON s.id = (
+        LEFT JOIN signals s ON s.client_id = c.id
+          AND s.id = (
             SELECT id FROM signals
             WHERE client_id = c.id
             ORDER BY created_at DESC
             LIMIT 1
-        )
+          )
+        ORDER BY
+          CASE s.severity
+            WHEN 'HIGH'   THEN 1
+            WHEN 'MEDIUM' THEN 2
+            WHEN 'LOW'    THEN 3
+            ELSE 4
+          END,
+          s.score DESC
     """
     with get_connection() as conn:
         rows = conn.execute(sql).fetchall()
