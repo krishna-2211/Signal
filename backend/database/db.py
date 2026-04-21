@@ -21,9 +21,18 @@ def get_connection():
 
 def get_all_clients() -> list[dict]:
     sql = """
-        SELECT c.*, rm.name AS rm_name
+        SELECT c.*, rm.name AS rm_name,
+               s.signal_type, s.severity, s.score,
+               s.churn_score, s.credit_stress_score, s.upsell_score,
+               s.reasoning, s.run_date AS signal_run_date
         FROM clients c
         LEFT JOIN relationship_managers rm ON c.relationship_manager_id = rm.id
+        LEFT JOIN signals s ON s.id = (
+            SELECT id FROM signals
+            WHERE client_id = c.id
+            ORDER BY created_at DESC
+            LIMIT 1
+        )
     """
     with get_connection() as conn:
         rows = conn.execute(sql).fetchall()
@@ -44,9 +53,18 @@ def get_client_by_id(client_id: str) -> dict | None:
 
 def get_clients_by_rm(rm_id: str) -> list[dict]:
     sql = """
-        SELECT c.*, rm.name AS rm_name
+        SELECT c.*, rm.name AS rm_name,
+               s.signal_type, s.severity, s.score,
+               s.churn_score, s.credit_stress_score, s.upsell_score,
+               s.reasoning, s.run_date AS signal_run_date
         FROM clients c
         LEFT JOIN relationship_managers rm ON c.relationship_manager_id = rm.id
+        LEFT JOIN signals s ON s.id = (
+            SELECT id FROM signals
+            WHERE client_id = c.id
+            ORDER BY created_at DESC
+            LIMIT 1
+        )
         WHERE c.relationship_manager_id = ?
     """
     with get_connection() as conn:
@@ -213,17 +231,27 @@ def get_latest_briefs_by_rm(rm_id: str) -> list[dict]:
 
 
 def get_todays_briefs_by_rm(rm_id: str) -> list[dict]:
-    today = date.today().isoformat()
     sql = """
         SELECT b.*, c.name AS client_name
         FROM briefs b
         JOIN clients c ON b.client_id = c.id
-        WHERE b.relationship_manager_id = ? AND b.run_date = ?
-          AND b.signal_type != 'none' AND b.severity != 'NONE'
-        ORDER BY b.dollar_impact DESC
+        WHERE b.relationship_manager_id = ?
+          AND b.signal_type != 'none' AND b.signal_type IS NOT NULL
+          AND b.severity != 'NONE' AND b.severity IS NOT NULL
+          AND b.id = (
+            SELECT MAX(id) FROM briefs
+            WHERE client_id = b.client_id
+          )
+        ORDER BY
+          CASE b.severity
+            WHEN 'HIGH'   THEN 1
+            WHEN 'MEDIUM' THEN 2
+            WHEN 'LOW'    THEN 3
+          END,
+          b.dollar_impact DESC
     """
     with get_connection() as conn:
-        rows = conn.execute(sql, (rm_id, today)).fetchall()
+        rows = conn.execute(sql, (rm_id,)).fetchall()
     return [dict(r) for r in rows]
 
 

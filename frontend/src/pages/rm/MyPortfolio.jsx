@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
+import Sidebar from "../../components/Sidebar";
 import { getClients } from "../../services/api";
 import "../../styles/risk-dashboard.css";
 
-const RM_ID = "rm_001";
 
 const SIGNAL_FILTERS = [
   { key: "all",                label: "All",           dot: null },
@@ -133,6 +134,7 @@ function ClientRow({ client }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function MyPortfolio() {
+  const { user }              = useAuth();
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
@@ -144,7 +146,8 @@ export default function MyPortfolio() {
     setLoading(true);
     setError(null);
     try {
-      const res = await getClients(RM_ID);
+      const res = await getClients();
+      console.log('clients response:', res);
       setClients(Array.isArray(res) ? res : (res.clients ?? []));
     } catch (err) {
       setError(err.message);
@@ -202,52 +205,7 @@ export default function MyPortfolio() {
   return (
     <div className="app">
 
-      {/* ── Sidebar ── */}
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark" />
-          <div className="brand-name">Signal</div>
-        </div>
-
-        <div className="nav-label">Workspace</div>
-
-        <Link to="/rm/brief" className="nav-item">
-          <svg className="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2 6.5l6-4 6 4V13a1 1 0 01-1 1H3a1 1 0 01-1-1V6.5z" />
-            <path d="M6 14V9h4v5" />
-          </svg>
-          Today's Brief
-        </Link>
-
-        <Link to="/rm/portfolio" className="nav-item active">
-          <svg className="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="2" y="3.5" width="12" height="10" rx="1.5" />
-            <path d="M2 6.5h12" />
-            <path d="M6 3.5V2.5a1 1 0 011-1h2a1 1 0 011 1v1" />
-          </svg>
-          My Portfolio
-          <span className="count">{clients.length}</span>
-        </Link>
-
-        <Link to="/audit" className="nav-item">
-          <svg className="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2 4h12M2 8h12M2 12h8" />
-          </svg>
-          Audit Log
-        </Link>
-
-        <div className="divider" />
-
-        <Link to="/risk/dashboard" className="view-switch">
-          <svg className="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2 5h9l-2-2M14 11H5l2 2" />
-          </svg>
-          Switch to Risk View
-          <svg className="arrow" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M6 4l4 4-4 4" />
-          </svg>
-        </Link>
-      </aside>
+      <Sidebar activePage="portfolio" badge={{ portfolio: clients.length }} />
 
       {/* ── Main ── */}
       <main className="main">
@@ -263,10 +221,10 @@ export default function MyPortfolio() {
               <span>Pipeline · live</span>
             </div>
             <div className="user">
-              <div className="avatar">RM</div>
+              <div className="avatar">{user?.name?.split(" ").map(w => w[0]).slice(0,2).join("") ?? "RM"}</div>
               <div className="user-meta">
-                <div className="user-name">Relationship Manager</div>
-                <div className="user-role">Senior RM · {RM_ID}</div>
+                <div className="user-name">{user?.name ?? "—"}</div>
+                <div className="user-role">Senior RM · {user?.id ?? "—"}</div>
               </div>
             </div>
           </div>

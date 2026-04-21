@@ -1,14 +1,15 @@
 from collections import Counter, defaultdict
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException, status
 
+from backend.auth import get_current_user
 from backend.database.db import get_all_clients_with_latest_signals
 
 router = APIRouter()
 
 
 @router.get("/risk")
-def risk_dashboard():
+def risk_dashboard(current_user: dict = Depends(get_current_user)):
     """
     Full portfolio view for risk managers.
 
@@ -16,6 +17,12 @@ def risk_dashboard():
     severity counts, and sector stress flags (2+ clients in the same
     industry both carrying a credit_stress signal).
     """
+    if current_user["role"] != "risk":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Risk dashboard requires risk role",
+        )
+
     clients = get_all_clients_with_latest_signals()
 
     # ------------------------------------------------------------------

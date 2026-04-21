@@ -6,3 +6,5 @@ openai
 httpx
 requests
 pydantic
+python-jose[cryptography]
+passlib[bcrypt]

@@ -1,6 +1,8 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from backend.auth import get_current_user
 from backend.database.db import (
+    get_all_clients,
     get_client_balances,
     get_client_by_id,
     get_client_logins,
@@ -14,39 +16,54 @@ from backend.database.db import (
 router = APIRouter()
 
 
-@router.get("/")
-def list_clients(rm_id: str = Query(...)):
-    """Return all clients for an RM with their latest signal status."""
-    clients = get_clients_by_rm(rm_id)
-
-    if not clients:
-        return {"rm_id": rm_id, "clients": [], "count": 0}
-
-    client_ids = [c["id"] for c in clients]
+def _latest_brief_signals(client_ids: list[str]) -> dict[str, dict]:
+    """Return {client_id: {signal_type, severity}} for the latest brief per client."""
+    if not client_ids:
+        return {}
     placeholders = ",".join("?" * len(client_ids))
-
     sql = f"""
-        SELECT s.client_id, s.signal_type, s.severity, s.score,
-               s.churn_score, s.credit_stress_score, s.upsell_score, s.run_date
-        FROM signals s
-        WHERE s.id IN (
-            SELECT id FROM signals
+        SELECT client_id, signal_type, severity
+        FROM briefs
+        WHERE id IN (
+            SELECT MAX(id) FROM briefs
             WHERE client_id IN ({placeholders})
             GROUP BY client_id
-            HAVING created_at = MAX(created_at)
         )
+        AND signal_type != 'none' AND signal_type IS NOT NULL
+        AND severity != 'NONE' AND severity IS NOT NULL
     """
     with get_connection() as conn:
         rows = conn.execute(sql, client_ids).fetchall()
+    return {r["client_id"]: {"signal_type": r["signal_type"], "severity": r["severity"]}
+            for r in rows}
 
-    signals_by_client = {r["client_id"]: dict(r) for r in rows}
 
-    enriched = [
-        {**c, "latest_signal": signals_by_client.get(c["id"])}
-        for c in clients
-    ]
+@router.get("/")
+def list_clients(current_user: dict = Depends(get_current_user)):
+    """Return clients scoped by role: RM sees own portfolio, risk sees all."""
+    if current_user["role"] == "risk":
+        clients = get_all_clients()
+    else:
+        clients = get_clients_by_rm(current_user["user_id"])
 
-    return {"rm_id": rm_id, "clients": enriched, "count": len(enriched)}
+    if not clients:
+        return {"clients": [], "count": 0}
+
+    _signal_keys = {"signal_type", "severity", "score", "churn_score",
+                    "credit_stress_score", "upsell_score", "reasoning", "signal_run_date"}
+
+    # Brief signal takes precedence over signals table to keep Portfolio consistent with Brief
+    brief_signals = _latest_brief_signals([c["id"] for c in clients])
+
+    enriched = []
+    for c in clients:
+        sig = {k: c[k] for k in _signal_keys if k in c and c[k] is not None}
+        base = {k: v for k, v in c.items() if k not in _signal_keys}
+        if c["id"] in brief_signals:
+            sig.update(brief_signals[c["id"]])
+        enriched.append({**base, "latest_signal": sig or None})
+
+    return {"clients": enriched, "count": len(enriched)}
 
 
 @router.get("/{client_id}")

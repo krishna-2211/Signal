@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.routers import audit, briefs, clients, dashboard, pipeline
+from backend.routers import audit, auth_router, briefs, clients, dashboard, pipeline
 
 app = FastAPI(title="Signal API", version="1.0.0")
 
@@ -13,6 +13,7 @@ app.add_middleware(
     allow_credentials=True,
 )
 
+app.include_router(auth_router.router, prefix="/api/auth")
 app.include_router(pipeline.router, prefix="/api/pipeline")
 app.include_router(briefs.router, prefix="/api/briefs")
 app.include_router(clients.router, prefix="/api/clients")

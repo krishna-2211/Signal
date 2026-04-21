@@ -1,29 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
+import Sidebar from "../../components/Sidebar";
 import { actionBrief, getTodaysBriefs, runPipeline } from "../../services/api";
+import { getSignalTheme, SIGNAL_LABEL } from "../../utils/signalColors";
 import "../../styles/todays-brief.css";
-
-const RM_ID = "rm_001";
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-const SIGNAL_COLOR = {
-  credit_stress:      "red",
-  churn_risk:         "amber",
-  upsell_opportunity: "green",
-};
-
-const SIGNAL_BADGE_CLASS = {
-  credit_stress:      "signal-red",
-  churn_risk:         "signal-amber",
-  upsell_opportunity: "signal-green",
-};
-
-const SIGNAL_LABEL = {
-  credit_stress:      "Credit Stress",
-  churn_risk:         "Churn Risk",
-  upsell_opportunity: "Upsell Opportunity",
-};
 
 const IMPACT_LABEL = {
   revenue_at_risk:    "Revenue at risk",
@@ -87,11 +68,12 @@ function ActionIcon({ signalType }) {
 function BriefCard({ brief, actioned, onAction }) {
   const [actioning, setActioning] = useState(false);
 
-  const color       = SIGNAL_COLOR[brief.signal_type]       ?? "amber";
-  const badgeClass  = SIGNAL_BADGE_CLASS[brief.signal_type] ?? "signal-amber";
-  const signalLabel = SIGNAL_LABEL[brief.signal_type]       ?? brief.signal_type;
+  const theme       = getSignalTheme(brief.signal_type);
+  const color       = theme.cardClass;
+  const badgeClass  = theme.badgeClass;
+  const signalLabel = SIGNAL_LABEL[brief.signal_type] ?? brief.signal_type;
   const sevClass    = (brief.severity ?? "").toLowerCase();
-  const impactLabel = IMPACT_LABEL[brief.impact_type]       ?? "Impact";
+  const impactLabel = IMPACT_LABEL[brief.impact_type] ?? "Impact";
 
   async function handleAction() {
     if (actioned || actioning) return;
@@ -179,6 +161,7 @@ function BriefCard({ brief, actioned, onAction }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function TodaysBrief() {
+  const { user } = useAuth();
   const [briefs, setBriefs]         = useState([]);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState(null);
@@ -189,7 +172,7 @@ export default function TodaysBrief() {
     setLoading(true);
     setError(null);
     try {
-      const data = await getTodaysBriefs(RM_ID);
+      const data = await getTodaysBriefs();
       setBriefs(data.briefs ?? []);
     } catch (err) {
       setError(err.message);
@@ -223,52 +206,7 @@ export default function TodaysBrief() {
   return (
     <div className="app">
 
-      {/* ── Sidebar ── */}
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark" />
-          <div className="brand-name">Signal</div>
-        </div>
-
-        <div className="nav-label">Workspace</div>
-
-        <Link to="/rm/brief" className="nav-item active">
-          <svg className="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2 6.5l6-4 6 4V13a1 1 0 01-1 1H3a1 1 0 01-1-1V6.5z" />
-            <path d="M6 14V9h4v5" />
-          </svg>
-          Today's Brief
-          <span className="count">{pendingCount}</span>
-        </Link>
-
-        <Link to="/rm/portfolio" className="nav-item">
-          <svg className="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="2" y="3.5" width="12" height="10" rx="1.5" />
-            <path d="M2 6.5h12" />
-            <path d="M6 3.5V2.5a1 1 0 011-1h2a1 1 0 011 1v1" />
-          </svg>
-          My Portfolio
-        </Link>
-
-        <Link to="/audit" className="nav-item">
-          <svg className="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2 4h12M2 8h12M2 12h8" />
-          </svg>
-          Audit Log
-        </Link>
-
-        <div className="divider" />
-
-        <Link to="/risk" className="view-switch">
-          <svg className="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2 5h9l-2-2M14 11H5l2 2" />
-          </svg>
-          Switch to Risk View
-          <svg className="arrow" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M6 4l4 4-4 4" />
-          </svg>
-        </Link>
-      </aside>
+      <Sidebar activePage="brief" badge={{ brief: pendingCount }} />
 
       {/* ── Main ── */}
       <main className="main">
@@ -302,10 +240,10 @@ export default function TodaysBrief() {
               )}
             </button>
             <div className="user">
-              <div className="avatar">RM</div>
+              <div className="avatar">{user?.name?.split(" ").map(w => w[0]).slice(0,2).join("") ?? "RM"}</div>
               <div className="user-meta">
-                <div className="user-name">Relationship Manager</div>
-                <div className="user-role">Senior RM · {RM_ID}</div>
+                <div className="user-name">{user?.name ?? "—"}</div>
+                <div className="user-role">Senior RM · {user?.id ?? "—"}</div>
               </div>
             </div>
           </div>

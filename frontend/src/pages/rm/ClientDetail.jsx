@@ -1,48 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
+import Sidebar from "../../components/Sidebar";
 import { actionBrief, getClientDetail } from "../../services/api";
+import { getSignalTheme } from "../../utils/signalColors";
 import "../../styles/client-detail.css";
-
-// ── Signal theme maps ──────────────────────────────────────────────────────────
-
-const SIGNAL_THEME = {
-  credit_stress: {
-    color: "var(--red)",
-    soft:  "var(--red-soft)",
-    text:  "var(--red-text)",
-    badgeClass: "signal-red",
-    label: "Credit Stress",
-    tlClass: "red",
-    tlTag: "red",
-  },
-  churn_risk: {
-    color: "var(--amber)",
-    soft:  "var(--amber-soft)",
-    text:  "var(--amber-text)",
-    badgeClass: "signal-amber",
-    label: "Churn Risk",
-    tlClass: "amber",
-    tlTag: "amber",
-  },
-  upsell_opportunity: {
-    color: "var(--green)",
-    soft:  "var(--green-soft)",
-    text:  "var(--green-text)",
-    badgeClass: "signal-green",
-    label: "Upsell Opportunity",
-    tlClass: "green",
-    tlTag: "green",
-  },
-  none: {
-    color: "var(--text-3)",
-    soft:  "var(--bg-2)",
-    text:  "var(--text-2)",
-    badgeClass: "signal-gray",
-    label: "Stable",
-    tlClass: "gray",
-    tlTag: "gray",
-  },
-};
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -133,7 +95,7 @@ function deriveMetrics(data) {
 // ── TransactionChart ───────────────────────────────────────────────────────────
 
 function TransactionChart({ transactions, signalType }) {
-  const theme = SIGNAL_THEME[signalType] ?? SIGNAL_THEME.none;
+  const theme = getSignalTheme(signalType);
 
   // transactions are desc; reverse for chronological display
   const weeks = [...(transactions ?? [])].reverse().slice(-12);
@@ -204,7 +166,17 @@ function TransactionChart({ transactions, signalType }) {
                     className={`bar-col${isCurrent ? " current" : isAlert ? " alert" : ""}`}
                   >
                     <div className="bar-val">{fmt$(w.volume)}</div>
-                    <div className="bar" style={{ height: `${heightPct}%` }} />
+                    <div
+                      className="bar"
+                      style={{
+                        height: `${heightPct}%`,
+                        background: isCurrent
+                          ? theme.hex
+                          : isAlert
+                          ? `${theme.hex}66`
+                          : undefined,
+                      }}
+                    />
                     <div className="bar-label">{isCurrent ? "Now" : label}</div>
                   </div>
                 );
@@ -231,8 +203,9 @@ function TransactionChart({ transactions, signalType }) {
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export default function ClientDetail() {
-  const { client_id } = useParams();
-  const navigate = useNavigate();
+  const { user }       = useAuth();
+  const { client_id }  = useParams();
+  const navigate       = useNavigate();
 
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
@@ -303,7 +276,7 @@ export default function ClientDetail() {
             <div className="state-title">Failed to load client</div>
             <div>{error ?? "Unknown error"}</div>
             <button className="btn" onClick={fetchData}>Retry</button>
-            <button className="btn" onClick={() => navigate("/rm/brief")}>← Back</button>
+            <button className="btn" onClick={() => navigate(-1)}>← Back</button>
           </div>
         </main>
       </div>
@@ -312,9 +285,9 @@ export default function ClientDetail() {
 
   const { client, transactions, payments, balances, logins, product_usage, latest_signal, latest_brief } = data;
 
-  const signalType  = latest_signal?.signal_type ?? "none";
+  const signalType  = (latest_signal?.signal_type ?? "none").toLowerCase();
   const severity    = latest_signal?.severity ?? "NONE";
-  const theme       = SIGNAL_THEME[signalType] ?? SIGNAL_THEME.none;
+  const theme       = getSignalTheme(signalType);
   const metrics     = deriveMetrics({ client, balances, payments, logins, transactions });
 
   const clientInitials  = initials(client.name);
@@ -332,41 +305,7 @@ export default function ClientDetail() {
     <div className="app" style={cssVars}>
 
       {/* ── Sidebar ── */}
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark" />
-          <div className="brand-name">Signal</div>
-        </div>
-        <div className="nav-label">Workspace</div>
-        <Link to="/rm/brief" className="nav-item">
-          <svg className="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2 6.5l6-4 6 4V13a1 1 0 01-1 1H3a1 1 0 01-1-1V6.5z" /><path d="M6 14V9h4v5" />
-          </svg>
-          Today's Brief
-        </Link>
-        <Link to="/rm/portfolio" className="nav-item active">
-          <svg className="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="2" y="3.5" width="12" height="10" rx="1.5" /><path d="M2 6.5h12" /><path d="M6 3.5V2.5a1 1 0 011-1h2a1 1 0 011 1v1" />
-          </svg>
-          My Portfolio
-        </Link>
-        <Link to="/audit" className="nav-item">
-          <svg className="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2 4h12M2 8h12M2 12h8" />
-          </svg>
-          Audit Log
-        </Link>
-        <div className="divider" />
-        <Link to="/risk" className="view-switch">
-          <svg className="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2 5h9l-2-2M14 11H5l2 2" />
-          </svg>
-          Switch to Risk View
-          <svg className="arrow" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M6 4l4 4-4 4" />
-          </svg>
-        </Link>
-      </aside>
+      <Sidebar activePage="portfolio" />
 
       {/* ── Main ── */}
       <main className="main">
@@ -386,10 +325,10 @@ export default function ClientDetail() {
               <span>Pipeline · live</span>
             </div>
             <div className="user">
-              <div className="avatar">RM</div>
+              <div className="avatar">{user?.name?.split(" ").map(w => w[0]).slice(0,2).join("") ?? "RM"}</div>
               <div className="user-meta">
-                <div className="user-name">{client.rm_name ?? "Relationship Manager"}</div>
-                <div className="user-role">Senior Relationship Manager</div>
+                <div className="user-name">{user?.name ?? "—"}</div>
+                <div className="user-role">Senior RM · {user?.id ?? "—"}</div>
               </div>
             </div>
           </div>
@@ -424,7 +363,7 @@ export default function ClientDetail() {
               )}
             </div>
             <div className="head-actions">
-              <button className="btn" onClick={() => navigate("/rm/brief")}>
+              <button className="btn" onClick={() => navigate(-1)}>
                 <svg className="ico" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M7 2l-5 4 5 4" />
                 </svg>

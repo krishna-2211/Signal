@@ -10,7 +10,10 @@
       "Bash(npm install *)",
       "Bash(/c/Users/ASUS/Signal/venv/Scripts/python.exe -c \"import backend.main; print\\('Import OK'\\)\")",
       "Bash(/c/Users/ASUS/Signal/venv/Scripts/python.exe *)",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash(curl -s http://localhost:8000/api/dashboard/risk)",
+      "Bash(pip install *)",
+      "Bash(python *)"
     ]
   }
 }

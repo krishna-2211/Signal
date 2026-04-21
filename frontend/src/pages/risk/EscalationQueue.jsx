@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
+import Sidebar from "../../components/Sidebar";
 import { getRiskDashboard } from "../../services/api";
 import "../../styles/risk-dashboard.css";
 
@@ -134,6 +136,7 @@ function EscalationRow({ client }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function EscalationQueue() {
+  const { user }              = useAuth();
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
@@ -196,61 +199,10 @@ export default function EscalationQueue() {
   return (
     <div className="app">
 
-      {/* ── Sidebar ── */}
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark" />
-          <div className="brand-name">Signal</div>
-          <span className="mode-chip">RISK</span>
-        </div>
-
-        <div className="nav-label">Workspace</div>
-
-        <Link to="/rm/brief" className="nav-item">
-          <svg className="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2 6.5l6-4 6 4V13a1 1 0 01-1 1H3a1 1 0 01-1-1V6.5z" />
-            <path d="M6 14V9h4v5" />
-          </svg>
-          Today's Brief
-        </Link>
-
-        <Link to="/risk/dashboard" className="nav-item">
-          <svg className="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2 13V3m0 10h12M5 10V7m3 3V5m3 5V8" />
-          </svg>
-          Portfolio Risk
-        </Link>
-
-        <Link to="/risk/escalations" className="nav-item active">
-          <svg className="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M8 1.5L14.5 13H1.5L8 1.5z" />
-            <path d="M8 6v4M8 12v.01" />
-          </svg>
-          Escalations
-          {escalationCount > 0 && (
-            <span className="count hot">{escalationCount}</span>
-          )}
-        </Link>
-
-        <Link to="/audit" className="nav-item">
-          <svg className="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2 4h12M2 8h12M2 12h8" />
-          </svg>
-          Audit Log
-        </Link>
-
-        <div className="divider" />
-
-        <Link to="/rm/brief" className="view-switch">
-          <svg className="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2 5h9l-2-2M14 11H5l2 2" />
-          </svg>
-          Switch to RM View
-          <svg className="arrow" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M6 4l4 4-4 4" />
-          </svg>
-        </Link>
-      </aside>
+      <Sidebar
+        activePage="escalations"
+        badge={{ escalations: escalationCount, escalations_hot: escalationCount > 0 }}
+      />
 
       {/* ── Main ── */}
       <main className="main">
@@ -266,10 +218,10 @@ export default function EscalationQueue() {
               <span>Pipeline · live</span>
             </div>
             <div className="user">
-              <div className="avatar">MW</div>
+              <div className="avatar">{user?.name?.split(" ").map(w => w[0]).slice(0,2).join("") ?? "RM"}</div>
               <div className="user-meta">
-                <div className="user-name">Risk Manager</div>
-                <div className="user-role">Portfolio Risk Manager</div>
+                <div className="user-name">{user?.name ?? "—"}</div>
+                <div className="user-role">Risk Manager · {user?.id ?? "—"}</div>
               </div>
             </div>
           </div>

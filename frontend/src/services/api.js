@@ -1,24 +1,41 @@
 const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+const TOKEN_KEY = "signal_token";
+
+function authHeaders() {
+  const token = localStorage.getItem(TOKEN_KEY);
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 async function request(path, options = {}) {
   const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { "Content-Type": "application/json", ...options.headers },
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(),
+      ...options.headers,
+    },
     ...options,
   });
   if (!res.ok) {
+    if (res.status === 401) {
+      localStorage.removeItem(TOKEN_KEY);
+      window.location.replace("/login");
+      throw new Error("Session expired");
+    }
     const text = await res.text().catch(() => res.statusText);
     throw new Error(`${res.status} ${text}`);
   }
   return res.json();
 }
 
+// ── Auth ─────────────────────────────────────────────────────────────────────
+
+export const getMe = () => request("/api/auth/me");
+
 // ── Briefs ───────────────────────────────────────────────────────────────────
 
-export const getTodaysBriefs = (rmId) =>
-  request(`/api/briefs?rm_id=${encodeURIComponent(rmId)}`);
+export const getTodaysBriefs = () => request("/api/briefs/");
 
-export const getLatestBriefs = (rmId) =>
-  request(`/api/briefs/latest?rm_id=${encodeURIComponent(rmId)}`);
+export const getLatestBriefs = () => request("/api/briefs/latest");
 
 export const getClientBriefHistory = (clientId) =>
   request(`/api/briefs/${encodeURIComponent(clientId)}`);
@@ -31,18 +48,15 @@ export const actionBrief = (briefId, notes) =>
 
 // ── Clients ──────────────────────────────────────────────────────────────────
 
-export const getClients = (rmId) =>
-  request(`/api/clients?rm_id=${encodeURIComponent(rmId)}`);
+export const getClients = () => request("/api/clients/");
 
 export const getClientDetail = (clientId) =>
   request(`/api/clients/${encodeURIComponent(clientId)}`);
 
 // ── Pipeline ─────────────────────────────────────────────────────────────────
 
-export const runPipeline = (rmId) =>
-  request(`/api/pipeline/run${rmId ? `?rm_id=${encodeURIComponent(rmId)}` : ""}`, {
-    method: "POST",
-  });
+export const runPipeline = () =>
+  request("/api/pipeline/run", { method: "POST" });
 
 export const getPipelineStatus = () => request("/api/pipeline/status");
 

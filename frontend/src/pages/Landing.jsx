@@ -119,7 +119,7 @@ export default function Landing() {
       <div style={S.btnGroup}>
         <button
           style={S.btnPrimary}
-          onClick={() => navigate("/rm/brief")}
+          onClick={() => navigate("/login?role=rm")}
           onMouseEnter={(e) => { e.currentTarget.style.background = "#fff"; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = "#e6e9ef"; }}
         >
@@ -132,7 +132,7 @@ export default function Landing() {
 
         <button
           style={S.btnSecondary}
-          onClick={() => navigate("/risk/dashboard")}
+          onClick={() => navigate("/login?role=risk")}
           onMouseEnter={(e) => {
             e.currentTarget.style.background = "#0f1216";
             e.currentTarget.style.borderColor = "#2a313b";

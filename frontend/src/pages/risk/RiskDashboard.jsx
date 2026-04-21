@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
+import Sidebar from "../../components/Sidebar";
 import { getRiskDashboard, runPipeline } from "../../services/api";
 import "../../styles/risk-dashboard.css";
 
@@ -105,7 +107,8 @@ function flattenClients(bySignalType) {
 // ── SectorBanner ──────────────────────────────────────────────────────────────
 
 function SectorBanner({ sector }) {
-  const clientNames = sector.clients.join(", ");
+  const clients = sector.clients ?? [];
+  const clientNames = clients.join(", ");
   return (
     <div className="banner">
       <div className="banner-icon">
@@ -123,7 +126,7 @@ function SectorBanner({ sector }) {
           <span className="banner-title">{sector.industry}</span>
         </div>
         <div className="banner-text">
-          <strong>{sector.clients.length} clients</strong> in the same sector are showing
+          <strong>{clients.length} clients</strong> in the same sector are showing
           Credit Stress simultaneously. Possible sector-wide deterioration — recommend a
           concentration review before the next committee.
         </div>
@@ -147,6 +150,7 @@ function SectorBanner({ sector }) {
 // ── ClientRow ─────────────────────────────────────────────────────────────────
 
 function ClientRow({ client }) {
+  const navigate    = useNavigate();
   const signalType  = client.signal_type ?? "none";
   const severity    = client.severity ?? "NONE";
   const rowClass    = ROW_CLASS[signalType] ?? "row-gray";
@@ -169,7 +173,11 @@ function ClientRow({ client }) {
   const isPositive = signalType === "upsell_opportunity";
 
   return (
-    <tr className={rowClass}>
+    <tr
+      className={rowClass}
+      onClick={() => navigate(`/rm/client/${client.id}`)}
+      style={{ cursor: "pointer" }}
+    >
       <td>
         <div className="client-cell">
           <Link className="name" to={`/rm/client/${client.id}`}>
@@ -230,6 +238,7 @@ function ClientRow({ client }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function RiskDashboard() {
+  const { user }              = useAuth();
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
@@ -344,51 +353,10 @@ export default function RiskDashboard() {
   return (
     <div className="app">
 
-      {/* ── Sidebar ── */}
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark" />
-          <div className="brand-name">Signal</div>
-          <span className="mode-chip">RISK</span>
-        </div>
-
-        <div className="nav-label">Workspace</div>
-
-        <Link to="/rm/brief" className="nav-item">
-          <svg className="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2 6.5l6-4 6 4V13a1 1 0 01-1 1H3a1 1 0 01-1-1V6.5z" />
-            <path d="M6 14V9h4v5" />
-          </svg>
-          Today's Brief
-        </Link>
-
-        <Link to="/risk" className="nav-item active">
-          <svg className="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2 13V3m0 10h12M5 10V7m3 3V5m3 5V8" />
-          </svg>
-          Portfolio Risk
-          {highCount > 0 && <span className="count hot">{highCount}</span>}
-        </Link>
-
-        <Link to="/audit" className="nav-item">
-          <svg className="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2 4h12M2 8h12M2 12h8" />
-          </svg>
-          Audit Log
-        </Link>
-
-        <div className="divider" />
-
-        <Link to="/rm/brief" className="view-switch">
-          <svg className="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2 5h9l-2-2M14 11H5l2 2" />
-          </svg>
-          Switch to RM View
-          <svg className="arrow" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M6 4l4 4-4 4" />
-          </svg>
-        </Link>
-      </aside>
+      <Sidebar
+        activePage="risk-dashboard"
+        badge={{ "risk-dashboard": highCount, "risk-dashboard_hot": highCount > 0 }}
+      />
 
       {/* ── Main ── */}
       <main className="main">
@@ -422,10 +390,10 @@ export default function RiskDashboard() {
               )}
             </button>
             <div className="user">
-              <div className="avatar">MW</div>
+              <div className="avatar">{user?.name?.split(" ").map(w => w[0]).slice(0,2).join("") ?? "RM"}</div>
               <div className="user-meta">
-                <div className="user-name">Risk Manager</div>
-                <div className="user-role">Portfolio Risk Manager</div>
+                <div className="user-name">{user?.name ?? "—"}</div>
+                <div className="user-role">Risk Manager · {user?.id ?? "—"}</div>
               </div>
             </div>
           </div>
