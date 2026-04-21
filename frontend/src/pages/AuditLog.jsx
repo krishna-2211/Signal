@@ -85,8 +85,11 @@ export default function AuditLog() {
   async function fetchData() {
     setLoading(true);
     setError(null);
+    console.log('token:', localStorage.getItem('signal_token'));
+    console.log('calling audit log API...');
     try {
       const res = await getAuditLog(500);
+      console.log('audit log response:', res);
       setEntries(res.entries ?? []);
     } catch (err) {
       setError(err.message);
