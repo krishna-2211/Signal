@@ -9,7 +9,7 @@ from backend.config import settings
 
 logger = logging.getLogger(__name__)
 
-_GEMINI_MODEL  = "gemini-2.0-flash"
+_GEMINI_MODEL  = "gemini-2.5-flash"
 _OPENAI_MODEL  = "gpt-4o-mini"
 _TIMEOUT       = 30   # seconds — cloud providers
 _OLLAMA_TIMEOUT = 120  # seconds — local models are slower

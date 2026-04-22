@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
@@ -198,11 +199,12 @@ def get_products_catalog() -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def insert_signal(data: dict) -> int:
-    cols = ", ".join(data.keys())
-    placeholders = ", ".join("?" * len(data))
+    safe = {k: json.dumps(v) if isinstance(v, (list, dict)) else v for k, v in data.items()}
+    cols = ", ".join(safe.keys())
+    placeholders = ", ".join("?" * len(safe))
     sql = f"INSERT INTO signals ({cols}) VALUES ({placeholders})"
     with get_connection() as conn:
-        cur = conn.execute(sql, list(data.values()))
+        cur = conn.execute(sql, list(safe.values()))
         conn.commit()
         return cur.lastrowid
 
@@ -212,11 +214,12 @@ def insert_signal(data: dict) -> int:
 # ---------------------------------------------------------------------------
 
 def insert_brief(data: dict) -> int:
-    cols = ", ".join(data.keys())
-    placeholders = ", ".join("?" * len(data))
+    safe = {k: json.dumps(v) if isinstance(v, (list, dict)) else v for k, v in data.items()}
+    cols = ", ".join(safe.keys())
+    placeholders = ", ".join("?" * len(safe))
     sql = f"INSERT INTO briefs ({cols}) VALUES ({placeholders})"
     with get_connection() as conn:
-        cur = conn.execute(sql, list(data.values()))
+        cur = conn.execute(sql, list(safe.values()))
         conn.commit()
         return cur.lastrowid
 

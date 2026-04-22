@@ -47,8 +47,13 @@ class Orchestrator:
         briefs_generated = 0
         errors: list[dict] = []
 
-        for raw_client in clients:
+        print(f"\n{'='*50}")
+        print(f"🚀 Pipeline started — {len(clients)} clients to process")
+        print(f"{'='*50}\n")
+
+        for i, raw_client in enumerate(clients):
             client_id = raw_client["id"]
+            print(f"[{i+1}/{len(clients)}] Processing {raw_client.get('name', client_id)} ({client_id})...")
             try:
                 async with asyncio.timeout(_CLIENT_TIMEOUT):
                     # --------------------------------------------------------------
@@ -57,43 +62,48 @@ class Orchestrator:
                     self._audit(client_id, "started", "Step 1: data ingestion")
                     client_data = self._ingestion.run(client_id)
                     client = client_data["client"]  # richer dict from get_client_by_id
+                    print(f"  ✓ Data ingested")
 
                     # --------------------------------------------------------------
                     # Step 2 — External signals
                     # --------------------------------------------------------------
                     self._audit(client_id, "started", "Step 2: external signal fetch")
                     external = await self._external.run(client)
+                    print(f"  ✓ External signals fetched")
 
                     # --------------------------------------------------------------
                     # Step 3 — Signal detection
                     # --------------------------------------------------------------
                     self._audit(client_id, "started", "Step 3: signal detection")
                     signal = await self._detection.run(client_data, external)
+                    primary_signal = signal.get("primary_signal", "none")
+                    score_by_type = {
+                        "churn_risk": signal.get("churn_risk_score", 0),
+                        "credit_stress": signal.get("credit_stress_score", 0),
+                        "upsell_opportunity": signal.get("upsell_opportunity_score", 0),
+                    }
+                    print(f"  ✓ Signal detected: {primary_signal} / {signal.get('severity', 'NONE')} (score: {score_by_type.get(primary_signal, 0)})")
 
                     # --------------------------------------------------------------
                     # Step 4 — Impact estimation
                     # --------------------------------------------------------------
                     self._audit(client_id, "started", "Step 4: impact estimation")
                     impact = self._impact.run(client, signal)
+                    print(f"  ✓ Impact estimated: {impact['impact_type']} = ${impact['dollar_impact']:,.0f}")
 
                     # --------------------------------------------------------------
                     # Step 5 — Brief generation (only when a signal was detected)
                     # --------------------------------------------------------------
-                    primary_signal = signal.get("primary_signal", "none")
                     brief: dict = {}
                     if primary_signal != "none":
                         self._audit(client_id, "started", "Step 5: brief generation")
                         brief = await self._brief.run(client, signal, impact, external)
+                        print(f"  ✓ Brief generated")
 
                     # --------------------------------------------------------------
                     # Step 6 — Persist signal
                     # --------------------------------------------------------------
-                    score_by_type = {
-                        "churn_risk": signal.get("churn_risk_score", 0),
-                        "credit_stress": signal.get("credit_stress_score", 0),
-                        "upsell_opportunity": signal.get("upsell_opportunity_score", 0),
-                    }
-                    insert_signal({
+                    signal_data = {
                         "client_id": client_id,
                         "run_date": run_date,
                         "signal_type": primary_signal,
@@ -104,7 +114,12 @@ class Orchestrator:
                         "upsell_score": signal.get("upsell_opportunity_score", 0),
                         "reasoning": signal.get("reasoning", ""),
                         "created_at": datetime.utcnow().isoformat(),
-                    })
+                    }
+                    signal_data = {
+                        k: json.dumps(v) if isinstance(v, (list, dict)) else v
+                        for k, v in signal_data.items()
+                    }
+                    insert_signal(signal_data)
 
                     if primary_signal != "none":
                         signals_detected += 1
@@ -138,15 +153,24 @@ class Orchestrator:
                         f"impact=${impact.get('dollar_impact', 0):,.0f}",
                     )
 
+                    if primary_signal != "none":
+                        print(f"  → Done: {client['name']} — {primary_signal.upper()} {signal.get('severity', 'NONE')}\n")
+                    else:
+                        print(f"  → Stable — no brief needed\n")
+
             except TimeoutError:
                 logger.error("Pipeline timed out for client %s after %ss", client_id, _CLIENT_TIMEOUT)
                 errors.append({"client_id": client_id, "error": f"timed out after {_CLIENT_TIMEOUT}s"})
                 self._audit(client_id, "error", f"Pipeline timed out after {_CLIENT_TIMEOUT}s")
+                print(f"  ✗ FAILED: timed out after {_CLIENT_TIMEOUT}s\n")
 
             except Exception as exc:
                 logger.exception("Pipeline failed for client %s", client_id)
                 errors.append({"client_id": client_id, "error": str(exc)})
                 self._audit(client_id, "error", f"Pipeline error: {exc}")
+                print(f"  ✗ FAILED: {str(exc)[:100]}\n")
+
+            await asyncio.sleep(6)
 
         duration = (datetime.utcnow() - started_at).total_seconds()
         self._audit(
@@ -155,6 +179,15 @@ class Orchestrator:
             f"signals={signals_detected}, briefs={briefs_generated}, "
             f"errors={len(errors)}, duration={duration:.1f}s",
         )
+
+        print(f"\n{'='*50}")
+        print(f"✅ Pipeline complete")
+        print(f"   Processed : {total_processed}")
+        print(f"   Signals   : {signals_detected}")
+        print(f"   Briefs    : {briefs_generated}")
+        print(f"   Errors    : {len(errors)}")
+        print(f"   Duration  : {duration:.1f}s")
+        print(f"{'='*50}\n")
 
         return {
             "run_date": run_date,

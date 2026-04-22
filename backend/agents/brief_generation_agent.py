@@ -167,14 +167,29 @@ Respond with exactly this JSON and no other text:
         # Remove any remaining invalid escape sequences (keep valid JSON escapes)
         text = re.sub(r'\\(?!["\\/bfnrtu])', "", text)
 
+        # Remove single quote pairs — safe because valid JSON never uses single
+        # quotes; they only appear as Ollama emphasis artifacts
+        text = re.sub(r"'([^']*)'", r'\1', text)
+
+        # Fix ) used in place of ] to close arrays before a closing brace
+        text = re.sub(r'"\s*\)\s*\n?\s*\}', '"]\n}', text)
+        text = re.sub(r"'\s*\)\s*\n?\s*\}", "']\n}", text)
+        text = re.sub(r'\)\s*\n?\s*\}', ']\n}', text)
+
         # Strip trailing commas before closing } or ]
         text = re.sub(r",\s*([}\]])", r"\1", text)
 
+        # Balance square brackets before braces (arrays are nested inside the object)
+        open_brackets = text.count("[")
+        close_brackets = text.count("]")
+        if open_brackets > close_brackets:
+            text += "]" * (open_brackets - close_brackets)
+
         # Close any unclosed braces (handles truncated responses)
-        open_count = text.count("{")
-        close_count = text.count("}")
-        if open_count > close_count:
-            text += "}" * (open_count - close_count)
+        open_braces = text.count("{")
+        close_braces = text.count("}")
+        if open_braces > close_braces:
+            text += "}" * (open_braces - close_braces)
 
         return text
 

@@ -205,14 +205,50 @@ Respond with exactly this JSON structure and no other text:
         # Remove any remaining invalid escape sequences (keep valid JSON escapes)
         text = re.sub(r'\\(?!["\\/bfnrtu])', "", text)
 
+        # Remove single quote pairs — safe because valid JSON never uses single
+        # quotes; they only appear as Ollama emphasis artifacts
+        text = re.sub(r"'([^']*)'", r'\1', text)
+
+        # Fix ) used in place of ] to close arrays before a closing brace
+        text = re.sub(r'"\s*\)\s*\n?\s*\}', '"]\n}', text)
+        text = re.sub(r"'\s*\)\s*\n?\s*\}", "']\n}", text)
+        text = re.sub(r'\)\s*\n?\s*\}', ']\n}', text)
+
         # Strip trailing commas before closing } or ]
         text = re.sub(r",\s*([}\]])", r"\1", text)
 
+        # Replace explicit JSON null for numeric score fields with 0 so
+        # int() conversion in _parse_response never receives None
+        text = re.sub(
+            r'("(?:churn_risk_score|credit_stress_score|upsell_opportunity_score)"\s*:\s*)null',
+            r'\g<1>0',
+            text,
+        )
+
+        # Balance square brackets before braces (arrays are nested inside the object)
+        open_brackets = text.count("[")
+        close_brackets = text.count("]")
+        if open_brackets > close_brackets:
+            text += "]" * (open_brackets - close_brackets)
+
         # Close any unclosed braces (handles truncated responses)
-        open_count = text.count("{")
-        close_count = text.count("}")
-        if open_count > close_count:
-            text += "}" * (open_count - close_count)
+        open_braces = text.count("{")
+        close_braces = text.count("}")
+        if open_braces > close_braces:
+            text += "}" * (open_braces - close_braces)
+
+        # Fix malformed key_indicators items produced by Ollama where an array
+        # item is split across a quoted token and bare text, e.g.:
+        #   ["-0.38" balance change]  →  ["-0.38 balance change"]
+        text = re.sub(
+            r'"key_indicators"\s*:\s*\[[^\]]*\]',
+            lambda m: re.sub(
+                r'"([^"]+)"\s+([^,\[\]"]+)',
+                lambda i: f'"{i.group(1)} {i.group(2).strip()}"',
+                m.group(0),
+            ),
+            text,
+        )
 
         return text
 
@@ -256,19 +292,26 @@ Respond with exactly this JSON structure and no other text:
             )
             return self._regex_fallback(raw, client_id)
 
-        primary = parsed.get("primary_signal", "none")
-        if primary not in self._VALID_SIGNALS:
+        signal_raw = (parsed.get("primary_signal") or "none").lower().strip()
+
+        if signal_raw.startswith("upsell") or signal_raw.startswith("ups") or signal_raw.startswith("upa"):
+            signal_raw = "upsell_opportunity"
+        elif signal_raw.startswith("credit") or signal_raw.startswith("cred"):
+            signal_raw = "credit_stress"
+        elif signal_raw.startswith("churn") or signal_raw.startswith("chu"):
+            signal_raw = "churn_risk"
+        elif signal_raw not in self._VALID_SIGNALS:
             logger.warning(
                 "SignalDetectionAgent got invalid primary_signal '%s' for client %s — defaulting to 'none'",
-                primary, client_id,
+                signal_raw, client_id,
             )
-            primary = "none"
+            signal_raw = "none"
 
         return {
-            "churn_risk_score": int(parsed.get("churn_risk_score", 0)),
-            "credit_stress_score": int(parsed.get("credit_stress_score", 0)),
-            "upsell_opportunity_score": int(parsed.get("upsell_opportunity_score", 0)),
-            "primary_signal": primary,
+            "churn_risk_score": int(parsed.get("churn_risk_score") or 0),
+            "credit_stress_score": int(parsed.get("credit_stress_score") or 0),
+            "upsell_opportunity_score": int(parsed.get("upsell_opportunity_score") or 0),
+            "primary_signal": signal_raw,
             "severity": parsed.get("severity", "NONE"),
             "reasoning": parsed.get("reasoning", ""),
             "key_indicators": parsed.get("key_indicators", []),

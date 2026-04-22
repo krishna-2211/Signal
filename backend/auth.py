@@ -1,44 +1,46 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+import warnings
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
+warnings.filterwarnings("ignore", category=UserWarning)
+
 SECRET_KEY = "signal-secret-key-2026"
 ALGORITHM = "HS256"
 TOKEN_EXPIRY_MINUTES = 480
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
-# Pre-hashed bcrypt passwords
 USERS: dict[str, dict] = {
     "sarah.mitchell@signal.com": {
         "email":         "sarah.mitchell@signal.com",
-        "hashed_password": "$2b$12$uGaY2RAbQs9zUyGFRcfWIuO5qE/bIdBIpG1E45dkEWjiqL8ZMbn8u",
+        "hashed_password": "$2b$12$sqsRUCJeZ5o1Mbpc/NDYPOmADneIZwccbKBweIBtXdtvgSgP1ubjW",
         "user_id":       "rm_001",
         "role":          "rm",
         "name":          "Sarah Mitchell",
     },
     "james.okafor@signal.com": {
         "email":         "james.okafor@signal.com",
-        "hashed_password": "$2b$12$IUVRTWRzwLqi/ohgpIy0rO/VFnNfDuYP3INL7o1/65DlBQzBZzAVG",
+        "hashed_password": "$2b$12$dW7LwRb6ImxFbAhGMJ5vSe7voqZcxh3kc3abfa.z79KbLDeZ/7T3q",
         "user_id":       "rm_002",
         "role":          "rm",
         "name":          "James Okafor",
     },
     "priya.nair@signal.com": {
         "email":         "priya.nair@signal.com",
-        "hashed_password": "$2b$12$D8xnPCBbSz522KqOoU7RTuI7QsuTa07Oda263T4/kSqaYrj0Spsua",
+        "hashed_password": "$2b$12$I.5fpljkz2vsA/YYfP.CJO3CqU5ecbNjztNmn2kOwzacCiEsVqbEK",
         "user_id":       "rm_003",
         "role":          "rm",
         "name":          "Priya Nair",
     },
     "marcus.webb@signal.com": {
         "email":         "marcus.webb@signal.com",
-        "hashed_password": "$2b$12$rm4cNGRi5ggBOvXkpB8R3urXg8CzXMfmTF2zeUA7YupPpgKyRcggi",
+        "hashed_password": "$2b$12$i/rM94aGfUsbHqaIRlJgvO/MSUIWAWOlwD4Lzeoo8F3sktg5j0EEK",
         "user_id":       "risk_001",
         "role":          "risk",
         "name":          "Marcus Webb",
@@ -50,7 +52,10 @@ def authenticate_user(email: str, password: str) -> Optional[dict]:
     user = USERS.get(email)
     if not user:
         return None
-    if not pwd_context.verify(password, user["hashed_password"]):
+    try:
+        if not pwd_context.verify(password, user["hashed_password"]):
+            return None
+    except Exception:
         return None
     return user
 
