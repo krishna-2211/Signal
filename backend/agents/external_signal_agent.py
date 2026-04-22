@@ -56,7 +56,8 @@ class ExternalSignalAgent:
         location = client.get("location", "")
 
         async with httpx.AsyncClient(timeout=_TIMEOUT) as http:
-            news = await self._fetch_news(http, industry)
+            # NewsAPI disabled - rate limited
+            news = []
             macro = await self._fetch_fred(http, industry)
 
         external_data_available = bool(news or macro)

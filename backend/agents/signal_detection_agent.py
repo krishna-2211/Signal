@@ -91,7 +91,8 @@ class SignalDetectionAgent:
 
         self._audit(client_id, "started", "Signal detection started")
 
-        user_prompt = self._build_user_prompt(client, metrics, external_context)
+        pre = self._pre_detect(metrics)
+        user_prompt = self._build_user_prompt(client, metrics, external_context, pre)
 
         raw_response = ""
         try:
@@ -114,8 +115,42 @@ class SignalDetectionAgent:
     # Prompt construction
     # --------------------------------------------------------------------------
 
+    def _pre_detect(self, metrics: dict) -> dict:
+        volume_trend    = metrics.get("volume_trend_pct", 0) or 0
+        payment_drift   = metrics.get("avg_days_late_recent", 0) or 0
+        drift_direction = metrics.get("payment_drift_direction", "stable")
+        days_login      = metrics.get("days_since_last_login", 0) or 0
+        login_trend     = metrics.get("login_trend", "stable")
+        balance_change  = metrics.get("balance_change_pct", 0) or 0
+
+        credit_score = 0
+        if drift_direction == "worsening": credit_score += 40
+        if payment_drift > 8:             credit_score += 30
+        if payment_drift > 14:            credit_score += 20
+        if volume_trend < -15:            credit_score += 25
+        if balance_change < -20:          credit_score += 20
+
+        churn_score = 0
+        if days_login > 20:              churn_score += 35
+        if days_login > 35:              churn_score += 25
+        if login_trend == "declining":   churn_score += 30
+        if volume_trend < -25:           churn_score += 25
+        if balance_change < -30:         churn_score += 20
+
+        upsell_score = 0
+        if balance_change > 30:  upsell_score += 35
+        if volume_trend > 20:    upsell_score += 35
+        if balance_change > 80:  upsell_score += 20
+        if volume_trend > 40:    upsell_score += 20
+
+        return {
+            "credit_score": min(credit_score, 100),
+            "churn_score":  min(churn_score, 100),
+            "upsell_score": min(upsell_score, 100),
+        }
+
     def _build_user_prompt(
-        self, client: dict, metrics: dict, external_context: dict
+        self, client: dict, metrics: dict, external_context: dict, pre: dict
     ) -> str:
         drift_trend = metrics.get("payment_drift_trend")
         drift_str = (
@@ -165,6 +200,15 @@ EXTERNAL SIGNALS
 
   Macro indicator: {macro_str}
 
+PRE-ANALYSIS (MANDATORY - these are computed facts, not suggestions. You MUST reflect these in your scores):
+  Credit stress rule score:      {pre['credit_score']}/100
+  Churn risk rule score:         {pre['churn_score']}/100
+  Upsell opportunity rule score: {pre['upsell_score']}/100
+
+If any rule score is above 35, you MUST detect that signal. You CANNOT return a lower score
+than the rule scores above. Your LLM scores must be at least as high as the rule scores.
+Your job is to explain WHY based on the data, not to decide WHETHER a signal exists.
+
 Respond with exactly this JSON structure and no other text:
 {{
   "churn_risk_score": <0-100>,
@@ -184,6 +228,33 @@ Respond with exactly this JSON structure and no other text:
 
     def _clean_json(self, text: str) -> str:
         """Normalise LLM output into parseable JSON."""
+        # Replace Python None/True/False with JSON equivalents
+        text = text.replace(': None', ': null')
+        text = text.replace(':None', ':null')
+        text = text.replace(': True', ': true')
+        text = text.replace(':True', ':true')
+        text = text.replace(': False', ': false')
+        text = text.replace(':False', ':false')
+
+        # Fix unquoted primary_signal values
+        text = re.sub(
+            r'"primary_signal"\s*:\s*(none|churn_risk|credit_stress|upsell_opportunity)(?=\s*[,}])',
+            lambda m: f'"primary_signal": "{m.group(1)}"',
+            text,
+        )
+
+        # Fix unquoted severity values
+        text = re.sub(
+            r'"severity"\s*:\s*(HIGH|MEDIUM|LOW|NONE)(?=\s*[,}])',
+            lambda m: f'"severity": "{m.group(1)}"',
+            text,
+        )
+
+        # Quote any remaining unquoted signal/severity tokens
+        for _val in ("churn_risk", "credit_stress", "upsell_opportunity", "none",
+                     "HIGH", "MEDIUM", "LOW", "NONE"):
+            text = re.sub(rf'(?<!")\b{_val}\b(?!")', f'"{_val}"', text)
+
         # Strip markdown code fences
         if "```" in text:
             text = "\n".join(

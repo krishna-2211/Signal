@@ -146,6 +146,33 @@ Respond with exactly this JSON and no other text:
 
     def _clean_json(self, text: str) -> str:
         """Normalise LLM output into parseable JSON."""
+        # Replace Python None/True/False with JSON equivalents
+        text = text.replace(': None', ': null')
+        text = text.replace(':None', ':null')
+        text = text.replace(': True', ': true')
+        text = text.replace(':True', ':true')
+        text = text.replace(': False', ': false')
+        text = text.replace(':False', ':false')
+
+        # Fix unquoted primary_signal values
+        text = re.sub(
+            r'"primary_signal"\s*:\s*(none|churn_risk|credit_stress|upsell_opportunity)(?=\s*[,}])',
+            lambda m: f'"primary_signal": "{m.group(1)}"',
+            text,
+        )
+
+        # Fix unquoted severity values
+        text = re.sub(
+            r'"severity"\s*:\s*(HIGH|MEDIUM|LOW|NONE)(?=\s*[,}])',
+            lambda m: f'"severity": "{m.group(1)}"',
+            text,
+        )
+
+        # Quote any remaining unquoted signal/severity tokens
+        for _val in ("churn_risk", "credit_stress", "upsell_opportunity", "none",
+                     "HIGH", "MEDIUM", "LOW", "NONE"):
+            text = re.sub(rf'(?<!")\b{_val}\b(?!")', f'"{_val}"', text)
+
         # Strip markdown code fences
         if "```" in text:
             text = "\n".join(
